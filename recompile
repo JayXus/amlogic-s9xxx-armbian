@@ -321,7 +321,7 @@ apply_patch() {
 
     # Apply the common kernel patches
     if [[ -d "${kernel_patch_path}/common-kernel-patches" ]]; then
-        echo -e "${INFO} Copy common kernel patches from [ ${kernel_patch_path}/common-kernel-patches ] to [ ${kernel_path}/${local_kernel_path} ]"
+        echo -e "${INFO} Copy common kernel patches..."
         cp -vf ${kernel_patch_path}/common-kernel-patches/*.patch -t ${kernel_path}/${local_kernel_path}
 
         cd ${kernel_path}/${local_kernel_path}
@@ -329,13 +329,14 @@ apply_patch() {
             echo -e "${INFO} Apply patch file: [ ${file} ]"
             patch -p1 <"${file}"
         done
+        rm -f *.patch
     else
         echo -e "${INFO} No common kernel patches, skipping."
     fi
 
     # Apply the custom kernel patches
     if [[ -d "${kernel_patch_path}/${local_kernel_path}" ]]; then
-        echo -e "${INFO} Copy custom kernel patches from [ ${kernel_patch_path}/${local_kernel_path} ] to [ ${kernel_path}/${local_kernel_path} ]"
+        echo -e "${INFO} Copy custom kernel patches..."
         cp -vf ${kernel_patch_path}/${local_kernel_path}/*.patch -t ${kernel_path}/${local_kernel_path}
 
         cd ${kernel_path}/${local_kernel_path}
@@ -343,6 +344,7 @@ apply_patch() {
             echo -e "${INFO} Apply patch file: [ ${file} ]"
             patch -p1 <"${file}"
         done
+        rm -f *.patch
     else
         echo -e "${INFO} No custom kernel patches, skipping."
     fi
