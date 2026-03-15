@@ -19,6 +19,7 @@ on:
         options:
           - trixie
           - bookworm
+          - resolute
           - noble
           - jammy
       docker_img:
@@ -54,21 +55,24 @@ jobs:
               https://api.github.com/repos/${{ github.repository }}/releases?per_page=20 | \
               jq -r --arg RTK "Armbian_${{ inputs.source_branch }}_arm64_" \
               --arg BOARD "rootfs" \
-              '[.[] | select(.tag_name | contains($RTK))] |
-              map(.assets[] | select(.name | contains($BOARD) and endswith(".tar.gz"))) |
-              sort_by(.updated_at) |
+              '[.[] | select(.tag_name | contains($RTK)) |
+              {tag: .tag_name} + (.assets[] | select(.name | contains($BOARD) and endswith(".tar.gz")) |
+              {data: .updated_at, url: .url, name: .name})] |
+              sort_by(.data) |
               reverse |
-              .[0] |
-              {data: .updated_at, url: .url, name: .name}')
+              .[0]')
 
           [[ -z "${latest_version}" || "${latest_version}" == "null" ]] && {
               echo "Error: Failed to resolve Armbian rootfs download URL."
               exit 1
           }
 
-          # Extract download URL and filename
+          # Extract download URL, filename, and release tag
           latest_url="$(echo ${latest_version} | jq -r '.url')"
           armbian_filename="$(echo ${latest_version} | jq -r '.name')"
+          release_tag="$(echo ${latest_version} | jq -r '.tag')"
+          echo "Matched release tag: ${release_tag}"
+          echo "build_tag=${release_tag}" >> ${GITHUB_OUTPUT}
 
           # Download asset via GitHub API (binary stream)
           echo "Downloading: ${armbian_filename}"
@@ -87,8 +91,30 @@ jobs:
         if: ${{ steps.down.outputs.status == 'success' && !cancelled() }}
         run: |
           chmod +x ${MAKE_DOCKER_SH}
-          ${MAKE_DOCKER_SH}
+          ${MAKE_DOCKER_SH} ${{ inputs.source_branch }}
+
           echo "status=success" >> ${GITHUB_OUTPUT}
+
+      - name: Upload rebuilt images to Release
+        uses: ncipollo/release-action@main
+        if: ${{ steps.make.outputs.status == 'success' && !cancelled() }}
+        with:
+          tag: ${{ steps.down.outputs.build_tag }}
+          artifacts: offline/*.tar.gz
+          allowUpdates: true
+          removeArtifacts: false
+          replacesArtifacts: true
+          makeLatest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ### Armbian Image Information
+            - Default username: `root`
+            - Default password: `1234`
+            - Install command: `armbian-install`
+            - Update command: `armbian-update`
+            ### Applicable Platform
+            - 🐧 `arm64`
+            - 🐋 Docker image: https://hub.docker.com/u/ophub
 
       - name: Set up QEMU
         id: qemu
@@ -117,5 +143,6 @@ jobs:
           platforms: linux/arm64
           context: ${{ env.DOCKER_OUTPATH }}
           tags: |
-            "${{ inputs.docker_img }}-${{ inputs.source_branch }}:arm64"
-            "${{ inputs.docker_img }}-${{ inputs.source_branch }}:latest"
+            ${{ inputs.docker_img }}-${{ inputs.source_branch }}:arm64
+            ${{ inputs.docker_img }}-${{ inputs.source_branch }}:latest
+
